@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tap Game</title>
-    <!-- This script is essential for Telegram WebApp API -->
+    <title>Tap Game with Ads</title>
+    <!-- Telegram WebApp API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- ADSXUIT SDK -->
+    <script src="https://adsxuit.com/sdk.js" app_id="HK5VUYHOGH38JRJI"></script>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #1a1a2e;
             color: white;
             margin: 0;
@@ -134,6 +136,7 @@
             opacity: 0;
             transition: opacity 0.3s;
             pointer-events: none;
+            z-index: 9999;
         }
 
         .notification.show {
@@ -152,7 +155,6 @@
         <div class="energy-fill" id="energyFill"></div>
     </div>
 
-    <!-- The main tappable area -->
     <div class="tap-area" id="tapButton">
         👆
     </div>
@@ -163,21 +165,20 @@
 
     <script>
         // --- 1. INITIALIZATION ---
-        // We check if the Telegram WebApp script loaded correctly.
-        // If not, we run in browser mode for testing.
         let tg = window.Telegram?.WebApp;
         if (tg) {
             tg.ready();
-            tg.expand(); // Make the Mini App take full screen height
+            tg.expand();
         }
 
         // --- 2. GAME STATE ---
         let score = 0;
         let energy = 1000;
         const MAX_ENERGY = 1000;
-        const TAP_COST = 1;     // Energy consumed per tap
-        const TAP_REWARD = 10;  // Coins earned per tap
-        const ENERGY_REGEN_RATE = 1; // Energy points regenerated per second
+        const TAP_COST = 1;
+        const TAP_REWARD = 10;
+        const ENERGY_REGEN_RATE = 1;
+        const AD_REWARD = 500;
 
         // --- 3. DOM ELEMENTS ---
         const scoreDisplay = document.getElementById('scoreDisplay');
@@ -186,15 +187,11 @@
         const watchAdBtn = document.getElementById('watchAdBtn');
         const notification = document.getElementById('notification');
 
-        // --- 4. CORE FUNCTIONS ---
-
-        // Update the UI to reflect current score and energy
+        // --- 4. UI FUNCTIONS ---
         function updateUI() {
             scoreDisplay.textContent = score.toLocaleString();
             const energyPercent = (energy / MAX_ENERGY) * 100;
             energyFill.style.width = Math.max(0, energyPercent) + '%';
-            
-            // Disable visual tapping if energy is depleted
             if (energy < TAP_COST) {
                 tapButton.classList.add('cooldown');
             } else {
@@ -202,56 +199,47 @@
             }
         }
 
-        // Handle the tap interaction
-        function handleTap(event) {
-            if (energy < TAP_COST) return;
-
-            // Deduct energy, add coins
-            energy -= TAP_COST;
-            score += TAP_REWARD;
-
-            // Haptic feedback (if supported by the device)
-            if (tg?.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('light');
-            }
-
-            // Create a floating "+10" animation near the tap point
-            createFloatingText(event);
-
-            // Update the UI immediately
-            updateUI();
-        }
-
-        // Creates a floating "+10" text at the click location
-        function createFloatingText(event) {
-            const rect = tapButton.getBoundingClientRect();
-            // Calculate position relative to the button (or use pageX/Y for absolute)
-            const x = event.clientX || (rect.left + rect.width / 2);
-            const y = event.clientY || (rect.top + rect.height / 2);
-
-            const floatDiv = document.createElement('div');
-            floatDiv.className = 'floating-text';
-            floatDiv.textContent = `+${TAP_REWARD}`;
-            // Position the text at the tap location
-            floatDiv.style.left = `${x}px`;
-            floatDiv.style.top = `${y}px`;
-            document.body.appendChild(floatDiv);
-
-            // Remove the element after the animation finishes
-            setTimeout(() => floatDiv.remove(), 800);
-        }
-
-        // Show a temporary toast/notification message
         function showNotification(msg) {
             notification.textContent = msg;
             notification.classList.add('show');
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 2000);
+            setTimeout(() => notification.classList.remove('show'), 2500);
         }
 
-        // --- 5. ENERGY REGENERATION ---
-        // Every second, regenerate a small amount of energy
+        function awardAdReward() {
+            score += AD_REWARD;
+            updateUI();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            showNotification(`You earned ${AD_REWARD} coins!`);
+            watchAdBtn.textContent = '🎬 Watch Ad for 500';
+            setTimeout(() => { watchAdBtn.disabled = false; }, 3000);
+        }
+
+        // --- 5. TAP HANDLER ---
+        function createFloatingText(event) {
+            const rect = tapButton.getBoundingClientRect();
+            const x = event.clientX || (rect.left + rect.width / 2);
+            const y = event.clientY || (rect.top + rect.height / 2);
+            const floatDiv = document.createElement('div');
+            floatDiv.className = 'floating-text';
+            floatDiv.textContent = `+${TAP_REWARD}`;
+            floatDiv.style.left = `${x}px`;
+            floatDiv.style.top = `${y}px`;
+            document.body.appendChild(floatDiv);
+            setTimeout(() => floatDiv.remove(), 800);
+        }
+
+        function handleTap(event) {
+            if (energy < TAP_COST) return;
+            energy -= TAP_COST;
+            score += TAP_REWARD;
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            createFloatingText(event);
+            updateUI();
+        }
+
+        tapButton.addEventListener('pointerdown', handleTap);
+
+        // --- 6. ENERGY REGEN ---
         setInterval(() => {
             if (energy < MAX_ENERGY) {
                 energy = Math.min(MAX_ENERGY, energy + ENERGY_REGEN_RATE);
@@ -259,43 +247,42 @@
             }
         }, 1000);
 
-        // --- 6. EVENT LISTENERS ---
-        // Use 'pointerdown' for faster response than 'click' on mobile
-        tapButton.addEventListener('pointerdown', handleTap);
-
-        // --- 7. SIMULATED AD INTEGRATION ---
-        // This is a placeholder for a real ad network integration.
-        // In a real app, you would call your ad SDK here.
-        watchAdBtn.addEventListener('click', async () => {
-            // Disable the button to prevent multiple clicks
+        // --- 7. ADSXUIT AD INTEGRATION ---
+        // The SDK hooks into document clicks automatically, but it also exposes
+        // AdsXUIT.reward(callback) which fires the ad and runs your callback when
+        // the ad closes. This is the clean way to grant rewards.
+        watchAdBtn.addEventListener('click', () => {
             watchAdBtn.disabled = true;
             watchAdBtn.textContent = 'Loading ad...';
 
-            // Simulate an ad loading and playing delay
-            // In reality, you'd call something like `Adsgram.show()` here.
-            setTimeout(() => {
-                // Simulate a successful ad view
-                score += 500; 
-                updateUI();
-                
-                // Provide feedback
-                if (tg?.HapticFeedback) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                }
-                showNotification('You earned 500 coins!');
-
-                // Re-enable the button after a cooldown
+            if (typeof window.AdsXUIT === 'undefined') {
+                // SDK didn't load — fail gracefully
                 watchAdBtn.textContent = '🎬 Watch Ad for 500';
-                setTimeout(() => {
-                    watchAdBtn.disabled = false;
-                }, 3000); // Wait 3 seconds before allowing another ad
+                watchAdBtn.disabled = false;
+                showNotification('Ad service unavailable');
+                return;
+            }
 
-            }, 2000); // 2 second simulated ad duration
+            // Prefetch the network to warm it up, then show reward ad
+            window.AdsXUIT.init(() => {
+                window.AdsXUIT.reward(() => {
+                    // This callback runs when the ad overlay is closed
+                    awardAdReward();
+                });
+            });
+
+            // Safety net: if ad never fires within 8s, re-enable button
+            setTimeout(() => {
+                if (watchAdBtn.disabled && watchAdBtn.textContent === 'Loading ad...') {
+                    watchAdBtn.textContent = '🎬 Watch Ad for 500';
+                    watchAdBtn.disabled = false;
+                    showNotification('Ad failed to load');
+                }
+            }, 8000);
         });
 
-        // --- 8. INITIALIZE UI ---
+        // --- 8. INIT ---
         updateUI();
-
     </script>
 </body>
 </html>
